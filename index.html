@@ -219,6 +219,8 @@
       background:var(--subtle); color:var(--text); border:1px solid var(--border);
     }
     .modal-btn.secondary:hover{background:var(--border)}
+  /* Install button style: match tab-btn but slightly different icon spacing */
+  #install-btn{display:inline-flex; align-items:center; gap:8px}
   </style>
 </head>
 <body>
@@ -237,6 +239,8 @@
               <button id="export-pdf" class="export-option"><ion-icon name="document-outline"></ion-icon>PDF</button>
             </div>
           </div>
+          <!-- PWA Install button (Add to Home Screen) -->
+          <button id="install-btn" class="tab-btn" title="Tải App" ><ion-icon name="add-circle-outline"></ion-icon> Cài App</button>
           <div class="spacer"></div>
           <button id="themeToggle" class="icon-btn icon-glass theme-toggle" title="Light/Dark Mode"><ion-icon id="themeIcon" name="moon-outline"></ion-icon></button>
         </div>
@@ -626,6 +630,68 @@
 
     // initialize
     load();
+
+    // PWA Install / Add to Home Screen (A2HS)
+    const installBtn = document.getElementById('install-btn');
+    let deferredPrompt = null;
+
+    // Attach click handler now so the button always works (will show prompt or fallback instructions)
+    if (installBtn) {
+      installBtn.addEventListener('click', onInstallClick);
+    }
+
+    // Listen for the beforeinstallprompt event and stash it for later
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e; // Stash the event so it can be triggered later.
+      // We keep the button visible; clicking it will use deferredPrompt when available
+    });
+
+    // Click handler to show the prompt
+    function onInstallClick(e) {
+      if (!deferredPrompt) {
+        // Possibly iOS or already installed; show simple instructions for iOS
+        showIosInstallHelp();
+        return;
+      }
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the A2HS prompt');
+        } else {
+          console.log('User dismissed the A2HS prompt');
+        }
+        deferredPrompt = null;
+        if (installBtn) installBtn.style.display = 'none';
+      }).catch((err)=>{
+        console.error('Install prompt error:', err);
+      });
+    }
+
+    // Hide the install button when app is installed
+    window.addEventListener('appinstalled', (evt) => {
+      console.log('PWA was installed.', evt);
+      if (installBtn) installBtn.style.display = 'none';
+    });
+
+    // Small helper for iOS users where beforeinstallprompt isn't fired
+    function showIosInstallHelp(){
+      // Chỉ hiển thị hướng dẫn cho iOS Safari hoặc show fallback chung
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if(isIos && isSafari){
+        alert('Để cài app trên iPhone/iPad: nhấn nút Chia sẻ (hình vuông có mũi tên) → chọn "Thêm vào Màn hình chính".');
+      } else {
+        alert('Trình duyệt của bạn không hỗ trợ hộp thoại cài đặt tự động. Trên thiết bị di động, tìm tùy chọn "Add to Home Screen" hoặc "Thêm vào Màn hình chính" trong menu trình duyệt.');
+      }
+    }
+
+    // Try to register a simple service worker to make the app installable on supported browsers
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service worker registered:', reg.scope))
+        .catch(err => console.warn('Service worker registration failed:', err));
+    }
 
     // Export functionality
     if(exportBtn && exportMenu) {
